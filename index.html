@@ -76,6 +76,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .kpi{background:#ffffff12;border-radius:10px;padding:10px 12px;display:grid}
 .kpi b{font-family:var(--display);font-weight:800;font-size:1.9rem;line-height:1;color:var(--led)}
 .kpi span{font-size:.78rem;color:#b9c2cc}
+.fsub{font-size:.85rem;color:#b9c2cc}
 details.fm{border-bottom:1px solid var(--line)}
 details.fm summary{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.5fr) auto auto;gap:10px;align-items:center;padding:10px 4px;cursor:pointer;list-style:none}
 details.fm summary::-webkit-details-marker{display:none}
@@ -121,29 +122,23 @@ function kpi(v,l){return `<div class="kpi"><b class="num">${v}</b><span>${l}</sp
 const res=(sf,sa)=>sf>sa?'<span class="rw">Victoire</span>':sf<sa?'<span class="rl">Défaite</span>':'<span class="muted">Nul</span>';
 const dt=ms=>new Date(ms).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})+" "+new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
 function ficheTeam(P){
-  const ms=P.m.map(([d,o,sf,sa,bv,ps])=>({d:un36(d),o,sf,sa,bv,ps}));
-  const bon=ms.some(m=>m.ps.some(p=>p[4]>0));
-  const pm=new Map();
-  ms.forEach(m=>m.ps.forEach(([n,nm,p1,p2,p4,lf,f])=>{const k=nm.trim().toLowerCase();const r=pm.get(k)||{n,nm,m:0,p1:0,p2:0,p4:0,lf:0,f:0,pts:0};r.m++;r.p1+=p1;r.p2+=p2;r.p4+=p4;r.lf+=lf;r.f+=f;r.pts+=p1+2*p2+lf+p4*m.bv;pm.set(k,r)}));
-  const pl=[...pm.values()].sort((a,b)=>b.pts-a.pts);
-  const tot=k=>ms.reduce((s,m)=>s+m.ps.reduce((a,p)=>a+p[k],0),0);
-  const W=ms.filter(m=>m.sf>m.sa).length,PF=ms.reduce((s,m)=>s+m.sf,0),PA=ms.reduce((s,m)=>s+m.sa,0),F=pl.reduce((s,p)=>s+p.f,0);
+  /* chaque match : totaux de l'équipe [1 pt, 2 pts, bonus, LF, fautes] (anciens QR : détail joueurs, additionné ici) */
+  const ms=P.m.map(([d,o,sf,sa,bv,x])=>{
+    const c=Array.isArray(x[0])?[2,3,4,5,6].map(k=>x.reduce((s,p)=>s+(p[k]||0),0)):x;
+    return {d:un36(d),o,sf,sa,bv,p1:c[0],p2:c[1],p4:c[2],lf:c[3],f:c[4]};
+  });
+  const n=ms.length,bon=ms.some(m=>m.p4>0);
+  const T=k=>ms.reduce((s,m)=>s+m[k],0),avg=k=>n?(T(k)/n).toFixed(1).replace(".",","):"0";
+  const W=ms.filter(m=>m.sf>m.sa).length,L=ms.filter(m=>m.sf<m.sa).length,PF=T("sf"),PA=T("sa");
   return `
   <section class="fhero a"><span class="feyebrow">Fiche équipe${P.l?" · "+esc(P.l):""}</span><h1>${esc(P.t)}</h1>
-    <div class="kpis">${kpi(ms.length,"matchs")}${kpi(W,"victoires")}${kpi(PF,"points marqués")}${kpi(PA,"points encaissés")}${kpi(F,"fautes")}</div></section>
-  <section class="panel"><h3>Matchs</h3><div class="tbl-wrap"><table>
+    <span class="fsub">${n} match${n>1?"s":""} · ${W} victoire${W>1?"s":""} · ${L} défaite${L>1?"s":""} · moyennes par match :</span>
+    <div class="kpis">${kpi(avg("p1"),"paniers à 1 pt")}${kpi(avg("p2"),"paniers à 2 pts")}${bon?kpi(avg("p4"),"paniers bonus"):""}${kpi(avg("lf"),"lancers francs")}${kpi(avg("f"),"fautes")}${kpi(avg("sf"),"points marqués")}</div></section>
+  <section class="panel"><h3>Détail par match</h3><div class="tbl-wrap"><table>
     <thead><tr><th>Date</th><th>Adversaire</th><th class="n">Score</th><th>Résultat</th><th class="n">1 pt</th><th class="n">2 pts</th>${bon?'<th class="n">Bonus</th>':""}<th class="n">LF</th><th class="n">Fautes</th><th class="n">Pts</th></tr></thead>
-    <tbody>${ms.slice().reverse().map(m=>{const c=k=>m.ps.reduce((s,p)=>s+p[k],0);return `<tr><td>${dt(m.d)}</td><td>${esc(m.o)}</td><td class="n res">${m.sf} – ${m.sa}</td><td>${res(m.sf,m.sa)}</td><td class="n">${c(2)}</td><td class="n">${c(3)}</td>${bon?`<td class="n">${c(4)}</td>`:""}<td class="n">${c(5)}</td><td class="n">${c(6)}</td><td class="n"><b>${m.sf}</b></td></tr>`}).join("")}</tbody>
-    <tfoot><tr><td colspan="2">Total · ${ms.length} match${ms.length>1?"s":""}</td><td class="n">${PF} – ${PA}</td><td>${W} V · ${ms.length-W-ms.filter(m=>m.sf===m.sa).length} D</td><td class="n">${tot(2)}</td><td class="n">${tot(3)}</td>${bon?`<td class="n">${tot(4)}</td>`:""}<td class="n">${tot(5)}</td><td class="n">${tot(6)}</td><td class="n"><b>${PF}</b></td></tr></tfoot>
-  </table></div></section>
-  <section class="panel"><h3>Détail de chaque match par joueur</h3>
-    ${ms.slice().reverse().map(m=>`<details class="fm"><summary><span class="muted">${dt(m.d)}</span><span>contre <b>${esc(m.o)}</b></span><span class="res num">${m.sf} – ${m.sa}</span>${res(m.sf,m.sa)}</summary>
-      <div class="tbl-wrap"><table><thead><tr><th>N°</th><th>Joueur</th><th class="n">1 pt</th><th class="n">2 pts</th>${bon?`<th class="n">${m.bv} pts</th>`:""}<th class="n">LF</th><th class="n">Ftes</th><th class="n">Pts</th></tr></thead><tbody>
-      ${m.ps.map(([n,nm,p1,p2,p4,lf,f])=>`<tr><td>${esc(n)}</td><td>${esc(nm)}</td><td class="n">${p1}</td><td class="n">${p2}</td>${bon?`<td class="n">${p4}</td>`:""}<td class="n">${lf}</td><td class="n">${f}</td><td class="n"><b>${p1+2*p2+lf+p4*m.bv}</b></td></tr>`).join("")}</tbody></table></div></details>`).join("")}
-  </section>
-  <section class="panel"><h3>Joueurs sur l'ensemble des matchs</h3><div class="tbl-wrap"><table>
-    <thead><tr><th>Joueur</th><th class="n">Matchs</th><th class="n">1 pt</th><th class="n">2 pts</th>${bon?'<th class="n">Bonus</th>':""}<th class="n">LF</th><th class="n">Points</th><th class="n">Moy.</th><th class="n">Fautes</th></tr></thead>
-    <tbody>${pl.map(r=>`<tr><td>#${esc(r.n)} ${esc(r.nm)}</td><td class="n">${r.m}</td><td class="n">${r.p1}</td><td class="n">${r.p2}</td>${bon?`<td class="n">${r.p4}</td>`:""}<td class="n">${r.lf}</td><td class="n"><b>${r.pts}</b></td><td class="n">${(r.pts/r.m).toFixed(1).replace(".",",")}</td><td class="n">${r.f}</td></tr>`).join("")}</tbody></table></div></section>`;
+    <tbody>${ms.slice().reverse().map(m=>`<tr><td>${dt(m.d)}</td><td>${esc(m.o)}</td><td class="n res">${m.sf} – ${m.sa}</td><td>${res(m.sf,m.sa)}</td><td class="n">${m.p1}</td><td class="n">${m.p2}</td>${bon?`<td class="n">${m.p4}</td>`:""}<td class="n">${m.lf}</td><td class="n">${m.f}</td><td class="n"><b>${m.sf}</b></td></tr>`).join("")}</tbody>
+    <tfoot><tr><td colspan="2">Total · ${n} match${n>1?"s":""}</td><td class="n">${PF} – ${PA}</td><td>${W} V · ${L} D</td><td class="n">${T("p1")}</td><td class="n">${T("p2")}</td>${bon?`<td class="n">${T("p4")}</td>`:""}<td class="n">${T("lf")}</td><td class="n">${T("f")}</td><td class="n"><b>${PF}</b></td></tr></tfoot>
+  </table></div></section>`;
 }
 function fichePlayer(P){
   const ms=P.m.map(([d,o,sf,sa,bv,p1,p2,p4,lf,f])=>({d:un36(d),o,sf,sa,bv,p1,p2,p4,lf,f,pts:p1+2*p2+lf+p4*bv}));
